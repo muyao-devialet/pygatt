@@ -53,6 +53,12 @@ class GATTToolBLEDevice(BLEDevice):
         self._connected = False
 
     @connection_required
+    def get_primary_services(self, *args, **kwargs):
+        self._primary = self._backend.get_primary_services(
+            self, *args, **kwargs)
+        return self._primary
+
+    @connection_required
     def discover_characteristics(self, *args, **kwargs):
         self._characteristics = self._backend.discover_characteristics(
             self, *args, **kwargs)

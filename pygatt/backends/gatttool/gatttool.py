@@ -14,7 +14,7 @@ from uuid import UUID
 from contextlib import contextmanager
 
 from pygatt.exceptions import NotConnectedError, BLEError, NotificationTimeout
-from pygatt.backends import BLEBackend, Characteristic, BLEAddressType
+from pygatt.backends import BLEBackend, Characteristic, BLEAddressType, Primary
 from pygatt.backends.backend import DEFAULT_CONNECT_TIMEOUT_S
 from .device import GATTToolBLEDevice
 
@@ -102,6 +102,14 @@ class GATTToolReceiver(threading.Thread):
             'mtu': {
                 'patterns': [
                     r'MTU was exchanged successfully: (\d+)'
+                ]
+            },
+            'primary': {
+                'patterns': [
+                    r'attr handle: 0x([a-fA-F0-9]{4}), '
+                    'end grp handle: 0x([a-fA-F0-9]{4}) '
+                    'uuid: ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]'
+                    '{4}-[0-9a-f]{12})\r\n',  # noqa
                 ]
             }
         }
@@ -222,6 +230,7 @@ class GATTToolBackend(BLEBackend):
         self._receiver = None
         self._con = None  # gatttool interactive session
         self._characteristics = {}
+        self._primary = {}
         self._running = threading.Event()
         self._address = None
         self._send_lock = threading.Lock()
@@ -499,7 +508,7 @@ class GATTToolBackend(BLEBackend):
         try:
             value_handle = int(match.group(2), 16)
             char_uuid = match.group(3).strip().decode('ascii')
-            self._characteristics[UUID(char_uuid)] = Characteristic(
+            self._characteristics[value_handle] = Characteristic(
                 char_uuid, value_handle
             )
             log.debug(
@@ -531,6 +540,49 @@ class GATTToolBackend(BLEBackend):
             raise NotConnectedError("Characteristic discovery failed")
 
         return self._characteristics
+    
+    #################################################
+    def _save_primary_callback(self, event):
+        match = event["match"]
+        try:
+            primary_handle_begin = int(match.group(1), 16)
+            primary_handle_end = int(match.group(2), 16)
+            primary_uuid = match.group(3).strip().decode('ascii')
+            self._primary[primary_uuid] = Primary(
+                primary_uuid, primary_handle_begin, primary_handle_end
+            )
+            log.debug(
+                "Found Primary %s, value handle begin: 0x%x, value handle end: 0x%x",
+                primary_uuid,
+                primary_handle_begin,
+                primary_handle_end
+            )
+        except AttributeError:
+            pass
+
+    @at_most_one_device
+    def get_primary_services(self, timeout=5):
+        self._primary = {}
+        self._receiver.register_callback(
+            "primary",
+            self._save_primary_callback,
+        )
+        self.sendline('primary')
+
+        max_time = time.time() + timeout
+        while not self._primary and time.time() < max_time:
+            time.sleep(.5)
+
+        # Sleep one extra second in case we caught characteristic
+        # in the middle
+        time.sleep(1)
+
+        if not self._primary:
+            raise NotConnectedError("Primary services discovery failed")
+
+        return self._primary
+
+    #################################################
 
     def _handle_notification_string(self, event):
         msg = event["after"]
@@ -561,12 +613,13 @@ class GATTToolBackend(BLEBackend):
             false, sends a command and expects no acknowledgement from the
             device.
         """
-        cmd = 'char-write-{0} 0x{1:02x} {2}'.format(
+        cmd = 'char-write-{0} {1} {2}'.format(
             'req' if wait_for_response else 'cmd',
             handle,
             ''.join("{0:02x}".format(byte) for byte in value),
         )
 
+        print('Sending cmd=%s', cmd)
         log.debug('Sending cmd=%s', cmd)
         if wait_for_response:
             try:

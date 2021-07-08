@@ -83,8 +83,26 @@ class Characteristic(object):
         """
         Add a characteristic descriptor to the dictionary of descriptors.
         """
-        self.descriptors[uuid] = handle
+        self.descriptors[handle] = uuid
 
     def __str__(self):
         return "<%s uuid=%s handle=%d>" % (self.__class__.__name__,
                                            self.uuid, self.handle)
+
+class Primary(object):
+    """
+    A GATT Primary, including uuid, begin handle and end handle
+    """
+    def __init__(self, uuid, handle_begin, handle_end):
+        """
+        Sets the characteritic uuid and handle.
+
+        handle - a bytearray
+        """
+        self.uuid = uuid
+        self.handle_begin = handle_begin
+        self.handle_end = handle_end
+
+    def __str__(self):
+        return "<%s uuid=%s handle_begin=%d handle_end=%d>" % (self.__class__.__name__,
+                                           self.uuid, self.handle_begin, self.handle_end)

@@ -126,7 +126,7 @@ class BLEDevice(object):
         Writes a value to a given characteristic handle. This can be used to
         write to the characteristic config handle for a primary characteristic.
 
-        hande -- the handle to write to.
+        handle -- the handle to write to.
         value -- a bytearray to write to the characteristic.
         wait_for_response -- wait for response after writing.
 
@@ -155,7 +155,7 @@ class BLEDevice(object):
         Writes a value to a given characteristic handle. This can be used to
         write to the characteristic config handle for a primary characteristic.
 
-        hande -- the handle to write to.
+        handle -- the handle to write to.
         value -- a bytearray to write to the characteristic.
         wait_for_response -- wait for response after writing.
 
